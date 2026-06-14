@@ -145,19 +145,96 @@ Vector3f Scene::castRay_noBVH(const Ray &ray, int depth) const
 {
     if (depth > this->maxDepth) {
         return Vector3f(0.0,0.0,0.0);
-    }    
+    }
+
+    // 额外内容：在不使用场景级 BVH 的前提下完成与 castRay 一致的 Whitted 着色。
+    // check 模式不会调用 buildBVH()，因此这里必须用 intersect_noBVH 而非 this->bvh。
+    Intersection intersection = intersect_noBVH(ray);
     Vector3f hitColor = this->backgroundColor;
 
-    Object * hit_obj = nullptr;
-    
-    bool hit = Scene::trace(ray,&hit_obj);
-    if (hit)
-    {   
-        // TODO(Optional) Shader the Ray
-        // ========== 在这里添加下面的代码 ==========
-        
-        return Vector3f(1.0, 1.0, 1.0);
+    if (intersection.happened)
+    {
+        Material *m = intersection.m;
+        Object *hitObject = intersection.obj;
+        Vector3f hitPoint = intersection.coords;
+        Vector3f N = intersection.normal; // normal
+        Vector2f uv;
+        uint32_t index = 0;
+        Vector2f st; // st coordinates
+        hitObject->getSurfaceProperties(hitPoint, ray.direction, index, uv, N, st);
+        switch (m->getType()) {
+            case REFLECTION_AND_REFRACTION:
+            {
+                Vector3f reflectionDirection = normalize(reflect(ray.direction, N));
+                Vector3f refractionDirection = normalize(refract(ray.direction, N, m->ior));
+                Vector3f reflectionRayOrig = (dotProduct(reflectionDirection, N) < 0) ?
+                                             hitPoint - N * EPSILON :
+                                             hitPoint + N * EPSILON;
+                Vector3f refractionRayOrig = (dotProduct(refractionDirection, N) < 0) ?
+                                             hitPoint - N * EPSILON :
+                                             hitPoint + N * EPSILON;
+                Vector3f reflectionColor = castRay_noBVH(Ray(reflectionRayOrig, reflectionDirection), depth + 1);
+                Vector3f refractionColor = castRay_noBVH(Ray(refractionRayOrig, refractionDirection), depth + 1);
+                float kr;
+                fresnel(ray.direction, N, m->ior, kr);
+                hitColor = reflectionColor * kr + refractionColor * (1 - kr);
+                break;
+            }
+            case REFLECTION:
+            {
+                float kr;
+                fresnel(ray.direction, N, m->ior, kr);
+                Vector3f reflectionDirection = reflect(ray.direction, N);
+                Vector3f reflectionRayOrig = (dotProduct(reflectionDirection, N) < 0) ?
+                                             hitPoint + N * EPSILON :
+                                             hitPoint - N * EPSILON;
+                hitColor = castRay_noBVH(Ray(reflectionRayOrig, reflectionDirection), depth + 1) * kr;
+                break;
+            }
+            default:
+            {
+                // 漫反射/光泽材质使用 Phong 光照模型（漫反射 + 高光）
+                Vector3f lightAmt = 0, specularColor = 0;
+                Vector3f shadowPointOrig = (dotProduct(ray.direction, N) < 0) ?
+                                           hitPoint + N * EPSILON :
+                                           hitPoint - N * EPSILON;
+                for (uint32_t i = 0; i < get_lights().size(); ++i)
+                {
+                    auto area_ptr = dynamic_cast<AreaLight*>(this->get_lights()[i].get());
+                    if (area_ptr)
+                    {
+                        // Do nothing for this assignment
+                    }
+                    else
+                    {
+                        Vector3f lightDir = get_lights()[i]->position - hitPoint;
+                        lightDir = normalize(lightDir);
+                        float LdotN = std::max(0.f, dotProduct(lightDir, N));
+                        // 阴影测试：同样走非 BVH 的暴力求交
+                        bool inShadow = intersect_noBVH(Ray(shadowPointOrig, lightDir)).happened;
+                        lightAmt += (1 - inShadow) * get_lights()[i]->intensity * LdotN;
+                        Vector3f reflectionDirection = reflect(-lightDir, N);
+                        specularColor += powf(std::max(0.f, -dotProduct(reflectionDirection, ray.direction)),
+                                              m->specularExponent) * get_lights()[i]->intensity;
+                    }
+                }
+                hitColor = lightAmt * (hitObject->evalDiffuseColor(st) * m->Kd + specularColor * m->Ks);
+                break;
+            }
+        }
     }
-    
+
     return hitColor;
+}
+
+// 暴力遍历场景中所有物体，返回最近交点（不使用场景级 BVH）。
+Intersection Scene::intersect_noBVH(const Ray &ray) const
+{
+    Intersection nearest;
+    for (uint32_t k = 0; k < objects.size(); ++k) {
+        Intersection it = objects[k]->getIntersection(ray);
+        if (it.happened && it.distance < nearest.distance)
+            nearest = it;
+    }
+    return nearest;
 }

@@ -216,20 +216,36 @@ inline Bounds3 Triangle::getBounds() { return Union(Bounds3(v0, v1), v2); }
 inline Intersection Triangle::getIntersection(Ray ray)
 {
     Intersection inter;
-    // TODO find ray triangle intersection
+    // 只对正面三角形求交（背面剔除）：与封闭网格的可见面一致
+    if (dotProduct(ray.direction, normal) > 0)
+        return inter;
+    // Möller–Trumbore 光线-三角形求交：解 O + t*D = (1-u-v)V0 + u*V1 + v*V2
+    Vector3f pvec = crossProduct(ray.direction, e2);
+    float det = dotProduct(e1, pvec);
+    if (fabs(det) < EPSILON)        // 行列式≈0：光线与三角形平行，无交点
+        return inter;
 
-    float tnear = std::numeric_limits<float>::max();
-    float u, v;
+    float invDet = 1.0f / det;
+    Vector3f tvec = ray.origin - v0;
+    float u = dotProduct(tvec, pvec) * invDet;
+    if (u < 0 || u > 1)             // 重心坐标越界
+        return inter;
 
-    if (rayTriangleIntersect(v0, v1, v2, ray.origin, ray.direction, tnear, u, v)) {
-        inter.happened = true;
-        inter.coords = ray.origin + ray.direction * tnear;
-        inter.normal = normal;
-        inter.distance = tnear;
-        inter.obj = this;
-        inter.m = m;
-    }
+    Vector3f qvec = crossProduct(tvec, e1);
+    float v = dotProduct(ray.direction, qvec) * invDet;
+    if (v < 0 || u + v > 1)
+        return inter;
 
+    float t = dotProduct(e2, qvec) * invDet;
+    if (t < 0)                      // 交点在光线起点之后，丢弃
+        return inter;
+
+    inter.happened = true;
+    inter.coords = ray(t);
+    inter.normal = normal;
+    inter.distance = t;
+    inter.obj = this;
+    inter.m = m;
     return inter;
 }
 

@@ -32,6 +32,8 @@ public:
     const std::vector<Object*>& get_objects() const { return objects; }
     const std::vector<std::unique_ptr<Light> >&  get_lights() const { return lights; }
     Intersection intersect(const Ray& ray) const;
+    // 不依赖场景级 BVH 的暴力最近交点（check 模式下 scene.bvh 未构建时使用）
+    Intersection intersect_noBVH(const Ray& ray) const;
     BVHAccel *bvh;
     void buildBVH();
     Vector3f castRay(const Ray &ray, int depth) const;

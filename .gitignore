@@ -11,6 +11,12 @@ RayTracing
 *.ppm
 *.png
 *.jpg
+# 但实验结果图与报告配图需纳入版本库（覆盖上面的 *.png 规则）
+!images/*.png
+!report/figures/*.png
+
+# 提交打包文件不纳入版本库
+*.zip
 
 # IDE 文件
 .vscode/
