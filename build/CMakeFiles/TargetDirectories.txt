@@ -1,3 +1,0 @@
-/home/sxy/Ray Tracing/Ray Tracing/code/build/CMakeFiles/RayTracing.dir
-/home/sxy/Ray Tracing/Ray Tracing/code/build/CMakeFiles/edit_cache.dir
-/home/sxy/Ray Tracing/Ray Tracing/code/build/CMakeFiles/rebuild_cache.dir
