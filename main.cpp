@@ -48,14 +48,16 @@ int main(int argc, char** argv)
 
     Renderer r;
 
-    auto start = std::chrono::system_clock::now();
+    auto start = std::chrono::steady_clock::now();
     r.Render(scene, check_mode);
-    auto stop = std::chrono::system_clock::now();
+    auto stop = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed = stop - start;
 
     std::cout << "Render complete: \n";
     std::cout << "Time taken: " << std::chrono::duration_cast<std::chrono::hours>(stop - start).count() << " hours\n";
     std::cout << "          : " << std::chrono::duration_cast<std::chrono::minutes>(stop - start).count() << " minutes\n";
     std::cout << "          : " << std::chrono::duration_cast<std::chrono::seconds>(stop - start).count() << " seconds\n";
+    std::cout << "Render seconds: " << elapsed.count() << "\n";
 
     return 0;
 }

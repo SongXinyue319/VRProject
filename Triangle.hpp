@@ -191,6 +191,17 @@ public:
         return intersec;
     }
 
+    Intersection getIntersectionNoBVH(Ray ray) override
+    {
+        Intersection nearest;
+        for (auto& tri : triangles) {
+            Intersection hit = tri.getIntersection(ray);
+            if (hit.happened && hit.distance < nearest.distance)
+                nearest = hit;
+        }
+        return nearest;
+    }
+
     Bounds3 bounding_box;
     std::unique_ptr<Vector3f[]> vertices;
     uint32_t numTriangles;

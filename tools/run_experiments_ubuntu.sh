@@ -67,8 +67,8 @@ run_case() {
 
   local bvh_seconds
   local no_bvh_seconds
-  bvh_seconds="$(awk '/seconds/ { value=$2 } END { print value }' "$bvh_log")"
-  no_bvh_seconds="$(awk '/seconds/ { value=$2 } END { print value }' "$no_bvh_log")"
+  bvh_seconds="$(awk '/Render seconds:/ { value=$3 } END { print value }' "$bvh_log")"
+  no_bvh_seconds="$(awk '/Render seconds:/ { value=$3 } END { print value }' "$no_bvh_log")"
 
   local speedup
   speedup="$(awk -v n="$no_bvh_seconds" -v b="$bvh_seconds" 'BEGIN { if (b > 0) printf "%.4f", n / b; else print "NA" }')"

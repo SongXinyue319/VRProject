@@ -232,7 +232,7 @@ Intersection Scene::intersect_noBVH(const Ray &ray) const
 {
     Intersection nearest;
     for (uint32_t k = 0; k < objects.size(); ++k) {
-        Intersection it = objects[k]->getIntersection(ray);
+        Intersection it = objects[k]->getIntersectionNoBVH(ray);
         if (it.happened && it.distance < nearest.distance)
             nearest = it;
     }

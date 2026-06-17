@@ -1,0 +1,4 @@
+model,vertices,faces,bvh_seconds,no_bvh_seconds,speedup
+dragon_res3,22998,47794,0.393581,538.566,1368.3740
+dragon_res2,100250,202520,0.549141,2535.28,4616.8106
+armadillo,172974,345944,0.601281,5029.13,8364.0261
