@@ -1,6 +1,6 @@
 \subsection{不同模型面数下的 BVH 加速效果分析}
 
-为进一步验证 BVH 对光线--三角形求交过程的加速效果，本文选取三个不同面数的 Stanford 模型进行对比实验。实验分辨率均为 $1280 \times 960$，渲染内容和光照设置保持一致，仅替换输入网格模型。对每个模型分别测试两种模式：一种为启用 BVH 的正常渲染模式，另一种为关闭 BVH 后逐三角形暴力遍历求交的 \texttt{check} 模式。实验结果如表~\ref{tab:bvh-speedup-models} 所示。
+为进一步验证 BVH 对光线--三角形求交过程的加速效果，本文选取三个不同面数的 Stanford 模型进行对比实验。实验分辨率均为 $1280 \times 960$，渲染内容和光照设置保持一致，仅替换输入网格模型。对每个模型分别测试两种模式：一种为启用 BVH 的正常渲染模式，另一种为关闭 BVH 后逐三角形暴力遍历求交的 \texttt{check} 模式（经 \texttt{getIntersectionNoBVH} 直接遍历网格全部三角形、不依赖任何层次结构）。整个流程由自动化脚本 \texttt{run\_experiments\_ubuntu.sh} 在 Release 构建下完成：对每个模型依次运行两种模式、解析程序输出的高精度 \texttt{Render seconds} 计时并汇总为 \texttt{summary.csv}，保证测量一致、可复现。实验结果如表~\ref{tab:bvh-speedup-models} 所示。
 
 \begin{table}[htbp]
   \centering

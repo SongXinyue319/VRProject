@@ -60,7 +60,9 @@
 （光线–三角形求交，Möller–Trumbore 算法）、\texttt{Bounds3::IntersectP}（光线–包围盒求交，slab 测试）
 与 \texttt{BVHAccel::getIntersection}（BVH 层次遍历加速求交）；并额外完成了 \texttt{Scene::castRay\_noBVH}
 中的完整着色模型（加分项）。在 $1280\times960$ 分辨率、含 \textbf{4968} 个三角形的 Stanford Bunny 场景下，
-BVH 模式约 \textbf{0.45\,s} 即可渲染出正确的着色图像。本文逐一说明各函数的算法原理、关键代码与实验结果。
+BVH 模式约 \textbf{0.45\,s} 即可渲染出正确的着色图像。在此基础上，本文进一步新增逐三角形暴力求交路径，
+并通过自动化实验对比三个不同面数的 Stanford 模型（Dragon、Armadillo）在 BVH 与无 BVH 下的渲染耗时，
+BVH 加速比最高达 \textbf{8364} 倍。本文逐一说明各函数的算法原理、关键代码与实验结果。
 \end{abstract}
 
 \section{概述}
@@ -216,14 +218,16 @@ return hit1.distance < hit2.distance ? hit1 : hit2;                            /
 Intersection Scene::intersect_noBVH(const Ray &ray) const {
     Intersection nearest;                       // 默认 distance = DBL_MAX
     for (uint32_t k = 0; k < objects.size(); ++k) {
-        Intersection it = objects[k]->getIntersection(ray);
+        Intersection it = objects[k]->getIntersectionNoBVH(ray);   // 真.逐三角形暴力
         if (it.happened && it.distance < nearest.distance) nearest = it;
     }
     return nearest;
 }
 \end{lstlisting}
 
-\noindent \texttt{castRay\_noBVH} 在此基础上完成与 \texttt{castRay} 一致的三分支着色：
+\noindent 这里的 \texttt{getIntersectionNoBVH} 对网格物体\textbf{直接遍历其全部三角形}、绕过
+\texttt{MeshTriangle} 内部 BVH，从而提供真正不含任何层次结构的暴力求交基线（用于后文的加速实验）。
+\texttt{castRay\_noBVH} 在此基础上完成与 \texttt{castRay} 一致的三分支着色：
 （1）反射 + 折射材质用 Fresnel 方程混合反/折射颜色；（2）镜面反射材质追投反射光线；
 （3）漫反射/光泽材质使用 Phong 模型（漫反射 + 高光），并对每个光源投射\textbf{阴影光线}判断遮挡：
 \begin{equation}
@@ -234,6 +238,8 @@ L=\sum_{\text{lights}} (1-\text{inShadow})\,I\,(\mathbf{N}\cdot\mathbf{l})\,k_d\
 故走 Phong 分支，最终检测模式得到与 BVH 模式\textbf{逐像素完全一致}的着色图像。
 
 \section{实验结果}
+
+\subsection{渲染正确性验证（Stanford Bunny）}
 
 编译与运行：
 \begin{lstlisting}[language=bash,numbers=none]
@@ -259,32 +265,24 @@ mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make
   \label{fig:results}
 \end{figure}
 
-本机（release 构建）实测渲染耗时如表~\ref{tab:time}。
+\noindent 在 $1280\times960$ 分辨率下，Bunny 场景的 BVH 模式约 $0.45\,\mathrm{s}$ 即可完成渲染，
+且两种模式输出\textbf{逐像素一致}，验证了求交与着色逻辑的正确性。
 
-\begin{table}[H]
-  \centering
-  \caption{渲染耗时（4968 三角形，$1280\times960$，3 次取稳定值）}
-  \label{tab:time}
-  \begin{tabular}{lcc}
-    \toprule
-    模式 & 是否使用场景级 BVH & 渲染耗时 \\
-    \midrule
-    \texttt{./RayTracing}        & 是 & $\approx 0.45$\,s \\
-    \texttt{./RayTracing check}  & 否（暴力遍历场景物体） & $\approx 0.46$\,s \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+需要说明的是，\texttt{MeshTriangle} 在构造时已对其内部 $4968$ 个三角形建立了一层 BVH；若检测模式仍调用常规
+\texttt{getIntersection}，则即便关闭\textbf{场景级} BVH，网格\textbf{内部}的 BVH 仍在发挥加速作用，
+无法得到真正的“无 BVH”基线。为获得公平对照，本文新增逐三角形暴力求交路径 \texttt{getIntersectionNoBVH}
+（绕过网格内部 BVH、直接遍历全部三角形），并在 \texttt{main.cpp} 中输出高精度的 \texttt{Render seconds} 计时，
+配合自动化实验脚本 \texttt{tools/run\_experiments\_ubuntu.sh}，在不同面数模型上系统评估 BVH 的加速收益，如下节所示。
 
-\noindent 两者耗时接近，是因为本场景仅含一个网格物体，而 \texttt{MeshTriangle} 在构造时已对其内部
-4968 个三角形建立了一层 BVH——即便关闭\textbf{场景级} BVH，网格\textbf{内部}的 BVH 仍在发挥加速作用。
-作为对照，文档给出的"完全不使用任何 BVH、逐三角形暴力求交"的参考耗时约为 7 分钟，
-而启用 BVH 后降至秒级，凸显了层次包围盒带来的数量级加速。
+\input{exp.tex}
 
 \section{总结}
 
 本次作业完整实现了基于 BVH 加速的 Whitted 风格光线追踪器：从主光线生成、Möller–Trumbore
 光线–三角形求交、AABB slab 包围盒测试，到 BVH 递归遍历，并额外补全了非 BVH 路径下的完整着色模型。
-在四千余三角形的 Bunny 场景上以约 0.45\,s 渲染出正确结果。通过本次实践，加深了对光线生成、
-解析法求交、空间数据结构加速以及局部光照（Phong + 阴影）等图形学核心概念的理解。
+在四千余三角形的 Bunny 场景上以约 0.45\,s 渲染出正确结果。进一步的跨模型对照实验表明，相比逐三角形
+暴力求交，BVH 在 $4.8$ 万至 $34.6$ 万面的 Stanford 模型上取得 $1368$ 至 $8364$ 倍加速，且渲染耗时几乎
+不随面数增长（$0.39\to0.60\,\mathrm{s}$），凸显了层次包围盒在复杂场景下的必要性。通过本次实践，加深了对
+光线生成、解析法求交、空间数据结构加速以及局部光照（Phong + 阴影）等图形学核心概念的理解。
 
 \end{document}
