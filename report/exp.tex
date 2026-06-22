@@ -1,6 +1,6 @@
 \subsection{不同模型面数下的 BVH 加速效果分析}
 
-为进一步验证 BVH 对光线--三角形求交过程的加速效果，本文选取三个不同面数的 Stanford 模型进行对比实验。实验分辨率均为 $1280 \times 960$，渲染内容和光照设置保持一致，仅替换输入网格模型。对每个模型分别测试两种模式：一种为启用 BVH 的正常渲染模式，另一种为关闭 BVH 后逐三角形暴力遍历求交的 \texttt{check} 模式（经 \texttt{getIntersectionNoBVH} 直接遍历网格全部三角形、不依赖任何层次结构）。整个流程由自动化脚本 \texttt{run\_experiments\_ubuntu.sh} 在 Release 构建下完成：对每个模型依次运行两种模式、解析程序输出的高精度 \texttt{Render seconds} 计时并汇总为 \texttt{summary.csv}，保证测量一致、可复现。实验结果如表~\ref{tab:bvh-speedup-models} 所示。
+为进一步验证 BVH 对光线--三角形求交过程的加速效果，本文选取三个不同面数的 Stanford 模型进行对比实验。实验分辨率均为 $1280 \times 960$，渲染内容和光照设置保持一致，仅替换输入网格模型。对每个模型分别测试两种模式：一种为启用 BVH 的正常渲染模式，另一种为关闭 BVH 后逐三角形暴力遍历求交的 \texttt{check} 模式（经 \texttt{getIntersectionNoBVH} 直接遍历网格全部三角形、不依赖任何层次结构）。整个流程由自动化脚本 \texttt{run\_experiments\_ubuntu.sh} 在 Release 构建下完成：对每个模型依次运行两种模式、解析程序输出的高精度 \texttt{Render seconds} 计时并汇总为 \texttt{summary.csv}，保证测量一致、可复现。实验结果如表~\ref{tab:bvh-speedup-models} 与图~\ref{fig:bvh-models} 所示。
 
 \begin{table}[htbp]
   \centering
@@ -16,6 +16,26 @@
     \hline
   \end{tabular}
 \end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}{0.32\textwidth}
+    \centering\includegraphics[width=\textwidth]{figures/dragon_res3_bvh.png}
+    \caption{Dragon res3（47794 面）}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.32\textwidth}
+    \centering\includegraphics[width=\textwidth]{figures/dragon_res2_bvh.png}
+    \caption{Dragon res2（202520 面）}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.32\textwidth}
+    \centering\includegraphics[width=\textwidth]{figures/armadillo_bvh.png}
+    \caption{Armadillo（345944 面）}
+  \end{subfigure}
+  \caption{三个不同面数 Stanford 模型在 BVH 模式下的渲染结果（$1280\times960$），对应表~\ref{tab:bvh-speedup-models}
+  中 BVH 列的输出。三幅图像均带有正确的漫反射、高光与自阴影；随面数增加，模型表面细节愈发丰富
+  （对比 Dragon res3 与 res2 的鳞片与轮廓），而 BVH 渲染耗时仍稳定在亚秒级。}
+  \label{fig:bvh-models}
+\end{figure}
 
 从实验结果可以看出，BVH 对三角网格渲染具有非常显著的加速效果。对于面数最少的 Dragon res3 模型，暴力求交需要 $538.566\,\mathrm{s}$，约为 $8.98$ 分钟；启用 BVH 后仅需 $0.394\,\mathrm{s}$，加速比达到 $1368.37$ 倍。随着模型面数增加，加速效果进一步增强：Dragon res2 的面数约为 Dragon res3 的 $4.24$ 倍，暴力求交时间增加到 $2535.280\,\mathrm{s}$，而 BVH 渲染时间仅增加到 $0.549\,\mathrm{s}$；Armadillo 模型包含 $345944$ 个三角形，暴力求交时间达到 $5029.130\,\mathrm{s}$，约为 $83.82$ 分钟，而 BVH 模式仍能在 $0.601\,\mathrm{s}$ 内完成渲染。
 
