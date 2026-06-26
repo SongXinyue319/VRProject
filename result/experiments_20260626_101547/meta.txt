@@ -1,0 +1,6 @@
+date=2026-06-26T10:15:48+00:00
+host=dsp7
+cores=32
+OMP_NUM_THREADS=32
+spp=1 (timing 用单采样，与原方法学一致；beauty 图另行 spp=2 渲染)
+build=Release -O3 + OpenMP + SAH-BVH

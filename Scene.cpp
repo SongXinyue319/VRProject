@@ -87,9 +87,10 @@ Vector3f Scene::castRay(const Ray &ray, int depth) const
                 float kr;
                 fresnel(ray.direction, N, m->ior, kr);
                 Vector3f reflectionDirection = reflect(ray.direction, N);
+                // 反射光线起点沿出射半球外侧偏移（与 REFLECTION_AND_REFRACTION 约定一致），避免自交
                 Vector3f reflectionRayOrig = (dotProduct(reflectionDirection, N) < 0) ?
-                                             hitPoint + N * EPSILON :
-                                             hitPoint - N * EPSILON;
+                                             hitPoint - N * EPSILON :
+                                             hitPoint + N * EPSILON;
                 hitColor = castRay(Ray(reflectionRayOrig, reflectionDirection),depth + 1) * kr;
                 break;
             }
@@ -117,14 +118,13 @@ Vector3f Scene::castRay(const Ray &ray, int depth) const
                     else
                     {
                         Vector3f lightDir = get_lights()[i]->position - hitPoint;
-                        // square of the distance between hitPoint and the light
-                        float lightDistance2 = dotProduct(lightDir, lightDir);
+                        // distance to the light along the (normalized) shadow ray
+                        float lightDistance = sqrtf(dotProduct(lightDir, lightDir));
                         lightDir = normalize(lightDir);
                         float LdotN = std::max(0.f, dotProduct(lightDir, N));
-                        Object *shadowHitObject = nullptr;
-                        float tNearShadow = kInfinity;
-                        // is the point in shadow, and is the nearest occluding object closer to the object than the light itself?
-                        bool inShadow = bvh->Intersect(Ray(shadowPointOrig, lightDir)).happened;
+                        // 阴影：只需"光源与交点之间是否存在遮挡"，用 any-hit 提前退出 +
+                        // 以光源距离为上界（避免把光源之后的几何误判为遮挡）。
+                        bool inShadow = intersectP(Ray(shadowPointOrig, lightDir), lightDistance);
                         lightAmt += (1 - inShadow) * get_lights()[i]->intensity * LdotN;
                         Vector3f reflectionDirection = reflect(-lightDir, N);
                         specularColor += powf(std::max(0.f, -dotProduct(reflectionDirection, ray.direction)),
@@ -186,8 +186,8 @@ Vector3f Scene::castRay_noBVH(const Ray &ray, int depth) const
                 fresnel(ray.direction, N, m->ior, kr);
                 Vector3f reflectionDirection = reflect(ray.direction, N);
                 Vector3f reflectionRayOrig = (dotProduct(reflectionDirection, N) < 0) ?
-                                             hitPoint + N * EPSILON :
-                                             hitPoint - N * EPSILON;
+                                             hitPoint - N * EPSILON :
+                                             hitPoint + N * EPSILON;
                 hitColor = castRay_noBVH(Ray(reflectionRayOrig, reflectionDirection), depth + 1) * kr;
                 break;
             }
@@ -208,10 +208,11 @@ Vector3f Scene::castRay_noBVH(const Ray &ray, int depth) const
                     else
                     {
                         Vector3f lightDir = get_lights()[i]->position - hitPoint;
+                        float lightDistance = sqrtf(dotProduct(lightDir, lightDir));
                         lightDir = normalize(lightDir);
                         float LdotN = std::max(0.f, dotProduct(lightDir, N));
-                        // 阴影测试：同样走非 BVH 的暴力求交
-                        bool inShadow = intersect_noBVH(Ray(shadowPointOrig, lightDir)).happened;
+                        // 阴影测试：同样走非 BVH 的暴力 any-hit，并以光源距离设界
+                        bool inShadow = intersectP_noBVH(Ray(shadowPointOrig, lightDir), lightDistance);
                         lightAmt += (1 - inShadow) * get_lights()[i]->intensity * LdotN;
                         Vector3f reflectionDirection = reflect(-lightDir, N);
                         specularColor += powf(std::max(0.f, -dotProduct(reflectionDirection, ray.direction)),
@@ -237,4 +238,24 @@ Intersection Scene::intersect_noBVH(const Ray &ray) const
             nearest = it;
     }
     return nearest;
+}
+
+// any-hit 遮挡查询（BVH 路径）：任一物体在 (eps,tMax) 内被命中即返回 true。
+bool Scene::intersectP(const Ray &ray, double tMax) const
+{
+    for (uint32_t k = 0; k < objects.size(); ++k)
+        if (objects[k]->intersectP(ray, tMax))
+            return true;
+    return false;
+}
+
+// any-hit 遮挡查询（暴力路径）：逐三角形检测，命中第一个 t<tMax 的遮挡即返回。
+bool Scene::intersectP_noBVH(const Ray &ray, double tMax) const
+{
+    for (uint32_t k = 0; k < objects.size(); ++k) {
+        Intersection it = objects[k]->getIntersectionNoBVH(ray);
+        if (it.happened && it.distance < tMax)
+            return true;
+    }
+    return false;
 }

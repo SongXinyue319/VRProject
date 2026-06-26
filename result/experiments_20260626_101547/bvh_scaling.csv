@@ -1,0 +1,6 @@
+# 补充实验1: 单线程 BVH 随面数缩放 (spp=1, OMP_NUM_THREADS=1)
+model,faces,bvh_1thread_seconds
+bunny,4968,0.236034
+dragon_res3,47794,0.256528
+dragon_res2,202520,0.318872
+armadillo,345944,0.258455

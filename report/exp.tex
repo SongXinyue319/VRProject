@@ -1,21 +1,37 @@
-\subsection{不同模型面数下的 BVH 加速效果分析}
+\subsection{不同模型面数下的 BVH 加速效果}
 
-为进一步验证 BVH 对光线--三角形求交过程的加速效果，本文选取三个不同面数的 Stanford 模型进行对比实验。实验分辨率均为 $1280 \times 960$，渲染内容和光照设置保持一致，仅替换输入网格模型。对每个模型分别测试两种模式：一种为启用 BVH 的正常渲染模式，另一种为关闭 BVH 后逐三角形暴力遍历求交的 \texttt{check} 模式（经 \texttt{getIntersectionNoBVH} 直接遍历网格全部三角形、不依赖任何层次结构）。整个流程由自动化脚本 \texttt{run\_experiments\_ubuntu.sh} 在 Release 构建下完成：对每个模型依次运行两种模式、解析程序输出的高精度 \texttt{Render seconds} 计时并汇总为 \texttt{summary.csv}，保证测量一致、可复现。实验结果如表~\ref{tab:bvh-speedup-models} 与图~\ref{fig:bvh-models} 所示。
+为验证 BVH 对光线--三角形求交的加速效果，选取四个不同面数的 Stanford 模型对比实验。分辨率均为
+$1280\times960$、\texttt{spp}=1，渲染内容与光照一致，仅替换输入网格。对每个模型测试两种模式：启用 BVH 的
+正常渲染，以及关闭 BVH、逐三角形暴力遍历的 \texttt{check} 模式（经 \texttt{getIntersectionNoBVH} 绕过网格
+内部 BVH、直接遍历全部三角形）。整个流程由脚本 \texttt{run\_experiments\_ubuntu.sh} 在 Release（\texttt{-O3}）
+构建下完成，\textbf{两种模式使用相同的 32 线程（OpenMP）}以保证同硬件、同并行度下的公平对照；脚本解析
+\texttt{Render seconds} 并汇总为 \texttt{summary.csv}，同时对每个模型 BVH 与 check 输出做 \texttt{cmp} 字节级
+核对，四个模型均\textbf{逐像素一致}。结果如表~\ref{tab:bvh-speedup-models}、图~\ref{fig:speedup} 与
+图~\ref{fig:bvh-models} 所示。
 
 \begin{table}[htbp]
   \centering
-  \caption{不同模型面数下 BVH 与暴力求交渲染时间对比}
+  \caption{不同模型面数下 BVH 与暴力求交渲染时间对比（同 32 线程，\texttt{spp}=1）}
   \label{tab:bvh-speedup-models}
   \begin{tabular}{lrrrrr}
     \hline
     模型 & 顶点数 & 面数 & BVH 渲染时间/s & 无 BVH 渲染时间/s & 加速比 \\
     \hline
-    Dragon res3 & 22998 & 47794 & 0.394 & 538.566 & 1368.37 \\
-    Dragon res2 & 100250 & 202520 & 0.549 & 2535.280 & 4616.81 \\
-    Armadillo & 172974 & 345944 & 0.601 & 5029.130 & 8364.03 \\
+    Bunny       & 2503   & 4968   & 0.0404 & 1.450   & 35.89   \\
+    Dragon res3 & 22998  & 47794  & 0.0420 & 30.529  & 726.44  \\
+    Dragon res2 & 100250 & 202520 & 0.0495 & 139.352 & 2813.15 \\
+    Armadillo   & 172974 & 345944 & 0.0344 & 226.813 & 6588.31 \\
     \hline
   \end{tabular}
 \end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{figures/speedup.png}
+  \caption{BVH 与逐三角形暴力求交的渲染时间对比（对数轴，同 32 线程）。暴力求交时间随面数从
+  $1.45\,\mathrm{s}$ 增长到 $226.8\,\mathrm{s}$，而 BVH 始终保持在数十毫秒量级；加速比从 $36$ 倍升至 $6588$ 倍。}
+  \label{fig:speedup}
+\end{figure}
 
 \begin{figure}[htbp]
   \centering
@@ -31,16 +47,38 @@
     \centering\includegraphics[width=\textwidth]{figures/armadillo_bvh.png}
     \caption{Armadillo（345944 面）}
   \end{subfigure}
-  \caption{三个不同面数 Stanford 模型在 BVH 模式下的渲染结果（$1280\times960$），对应表~\ref{tab:bvh-speedup-models}
-  中 BVH 列的输出。三幅图像均带有正确的漫反射、高光与自阴影；随面数增加，模型表面细节愈发丰富
-  （对比 Dragon res3 与 res2 的鳞片与轮廓），而 BVH 渲染耗时仍稳定在亚秒级。}
+  \caption{三个不同面数 Stanford 模型在 BVH 模式下的渲染结果（$1280\times960$、\texttt{spp}=2 抗锯齿）。
+  三幅图像均带有正确的漫反射、\textbf{镜面高光}与自阴影；随面数增加表面细节愈发丰富，而 BVH 渲染耗时仍稳定在数十毫秒。}
   \label{fig:bvh-models}
 \end{figure}
 
-从实验结果可以看出，BVH 对三角网格渲染具有非常显著的加速效果。对于面数最少的 Dragon res3 模型，暴力求交需要 $538.566\,\mathrm{s}$，约为 $8.98$ 分钟；启用 BVH 后仅需 $0.394\,\mathrm{s}$，加速比达到 $1368.37$ 倍。随着模型面数增加，加速效果进一步增强：Dragon res2 的面数约为 Dragon res3 的 $4.24$ 倍，暴力求交时间增加到 $2535.280\,\mathrm{s}$，而 BVH 渲染时间仅增加到 $0.549\,\mathrm{s}$；Armadillo 模型包含 $345944$ 个三角形，暴力求交时间达到 $5029.130\,\mathrm{s}$，约为 $83.82$ 分钟，而 BVH 模式仍能在 $0.601\,\mathrm{s}$ 内完成渲染。
+从实验结果可以看出，BVH 对三角网格渲染具有非常显著的加速效果。在同样的 32 线程下，面数最少的 Bunny（$4968$ 面）
+暴力求交需 $1.45\,\mathrm{s}$、BVH 仅 $40\,\mathrm{ms}$（$36$ 倍）；Armadillo（$345944$ 面）暴力求交达
+$226.8\,\mathrm{s}$、约 $3.8$ 分钟，而 BVH 仍能在 $34\,\mathrm{ms}$ 内完成，加速比高达 $6588$ 倍。
+其根本原因在于：暴力求交对每条光线都要遍历模型全部三角形，计算量随面数近似线性增长（$1280\times960$ 下主光线
+已超百万条，叠加阴影光线后求交次数更多）；而 BVH 先用廉价的包围盒测试剪掉大片不可能相交的空间，单条光线实际
+访问的三角形数量大幅减少，故 BVH 时间几乎不随面数增长。需要说明的是，由于本次两种模式都已多线程并行，暴力基线
+不再是分钟至小时级，而是秒级，因此这里的加速比（$36$--$6588$ 倍）低于早期单线程版本的数字，但二者仍处于同一
+硬件、同一并行度下，是\textbf{公平的同条件对照}。
 
-造成这一现象的主要原因是，暴力求交在每条光线与场景相交时都需要遍历模型中的全部三角形，其计算量随三角形数量近似线性增长。当图像分辨率固定为 $1280 \times 960$ 时，主光线数量已经超过一百万条，阴影光线还会进一步增加求交次数，因此高面数模型下暴力求交的时间会迅速上升。相比之下，BVH 将三角形组织成层次包围盒结构，光线首先与包围盒进行相交测试，只有通过包围盒测试的少量节点才会继续向下遍历。大量不可能相交的三角形会被提前剪枝，因此单条光线实际访问的三角形数量大幅减少。
+\subsection{BVH 随面数的缩放与多线程加速}
 
-从增长趋势上看，模型面数从 $47794$ 增加到 $345944$，约增加 $7.24$ 倍；无 BVH 模式的渲染时间从 $538.566\,\mathrm{s}$ 增加到 $5029.130\,\mathrm{s}$，约增加 $9.34$ 倍，表现出对面数非常敏感的特征。而 BVH 模式下渲染时间仅从 $0.394\,\mathrm{s}$ 增加到 $0.601\,\mathrm{s}$，增长约 $1.53$ 倍，说明 BVH 能够有效削弱模型复杂度对渲染时间的影响。加速比也随着面数增加而明显提升，从 $1368.37$ 倍提高到 $8364.03$ 倍，说明模型越复杂，BVH 的剪枝收益越明显。
+为更清晰地展示 BVH 的缩放特性，进一步测量\textbf{单线程}下 BVH 随面数的渲染时间，以及 Bunny 在不同线程数下的
+加速曲线（均 \texttt{spp}=1），如图~\ref{fig:scaling} 所示，原始数据见 \texttt{bvh\_scaling.csv}、
+\texttt{thread\_scaling.csv}。
 
-综上，本实验表明：在三角网格数量较大时，直接逐三角形求交会导致渲染时间达到分钟甚至小时级别，难以满足实际使用需求；而 BVH 能够将同样场景的渲染时间稳定控制在秒级以内。对于复杂模型，BVH 不仅显著降低了单次渲染耗时，也使高面数模型的光线追踪渲染具有可行性。
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.95\textwidth]{figures/scaling.png}
+  \caption{左：单线程 BVH 渲染时间随面数的变化——面数从 $4968$ 增至 $345944$（约 $\times70$），BVH 时间仅从
+  $236\,\mathrm{ms}$ 变到 $258\,\mathrm{ms}$（约 $\times1.1$），近似对数缩放；右：Bunny BVH 的多线程加速曲线，
+  $32$ 线程相对单线程约 $5.2$ 倍（小负载下受固定开销与 Amdahl 限制，加速未达线性，重负载场景可更高）。}
+  \label{fig:scaling}
+\end{figure}
+
+左图证实了 BVH 的核心优势：模型复杂度提升约 $70$ 倍，单线程 BVH 渲染时间几乎不变，体现出对数级而非线性的
+求交复杂度。右图表明，在本文新增的 OpenMP 并行下，渲染可进一步获得数倍加速；Bunny 这类亚秒级小负载因固定开销
+占比较高、加速曲线趋于平缓（$32$ 线程约 $5.2$ 倍），而暴力基线这类秒级以上的重负载并行效率更高。
+
+综上，BVH（求交算法层面）与多线程（并行层面）是两个正交的加速来源：前者把同场景的渲染时间从分钟级压到毫秒级、
+且几乎不随面数增长，后者在此之上再叠加数倍加速。两者共同使复杂网格的光线追踪渲染达到实用速度。

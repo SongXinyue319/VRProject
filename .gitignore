@@ -26,6 +26,11 @@ RayTracing
 # 临时文件
 *~
 *.log
+*.aux
+*.out
+
+# 本地 PPT 与生成脚本（含演示用 API key，不入库；成品 pptx/讲稿仅本地保存/单独提交）
+ppt/
 
 # macOS
 .DS_Store

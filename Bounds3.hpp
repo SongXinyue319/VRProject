@@ -86,28 +86,36 @@ class Bounds3
 
     inline bool IntersectP(const Ray& ray, const Vector3f& invDir,
                            const std::array<int, 3>& dirisNeg) const;
+    // 返回光线进入该盒的参数 t_enter（命中且 t_exit>=0 时）；未命中返回 +inf。
+    // 供 BVH 有序遍历与最近距离剪枝使用（t_enter 可为负，表示起点在盒内）。
+    inline float IntersectT(const Ray& ray, const Vector3f& invDir,
+                            const std::array<int, 3>& dirIsNeg) const;
 };
 
 
 
+inline float Bounds3::IntersectT(const Ray& ray, const Vector3f& invDir,
+                                 const std::array<int, 3>& dirIsNeg) const
+{
+    // invDir=(1/dx,1/dy,1/dz)（乘法替代除法）。用与符号无关的逐分量 min/max，
+    // 当某方向分量为 0（invDir=±inf）且起点落在该 slab 内时自然得到 (-inf,+inf) 无约束，
+    // 避免 swap 写法在该退化情形下误判未命中（dirIsNeg 参数保留以兼容调用方，此实现已不需要）。
+    (void)dirIsNeg;
+    Vector3f t1 = (pMin - ray.origin) * invDir;
+    Vector3f t2 = (pMax - ray.origin) * invDir;
+    float t_enter = std::max({std::min(t1.x, t2.x), std::min(t1.y, t2.y), std::min(t1.z, t2.z)});
+    float t_exit  = std::min({std::max(t1.x, t2.x), std::max(t1.y, t2.y), std::max(t1.z, t2.z)});
+
+    // 用 <= / >= 放宽，兼容轴对齐零厚度退化盒与相切情形
+    if (t_exit < 0 || t_enter > t_exit)
+        return std::numeric_limits<float>::infinity();
+    return t_enter;
+}
+
 inline bool Bounds3::IntersectP(const Ray& ray, const Vector3f& invDir,
                                 const std::array<int, 3>& dirIsNeg) const
 {
-    // invDir: ray direction(x,y,z), invDir=(1.0/x,1.0/y,1.0/z), use this because Multiply is faster that Division
-    // dirIsNeg: ray direction(x,y,z), dirIsNeg=[int(x>0),int(y>0),int(z>0)], use this to simplify your logic
-    // TODO test if ray bound intersects
-
-    Vector3f tMin = (pMin - ray.origin) * invDir;
-    Vector3f tMax = (pMax - ray.origin) * invDir;
-
-    if (!dirIsNeg[0]) std::swap(tMin.x, tMax.x);
-    if (!dirIsNeg[1]) std::swap(tMin.y, tMax.y);
-    if (!dirIsNeg[2]) std::swap(tMin.z, tMax.z);
-
-    float t_enter = std::max({tMin.x, tMin.y, tMin.z});
-    float t_exit = std::min({tMax.x, tMax.y, tMax.z});
-
-    return t_enter < t_exit && t_exit > 0;
+    return IntersectT(ray, invDir, dirIsNeg) < std::numeric_limits<float>::infinity();
 }
 
 inline Bounds3 Union(const Bounds3& b1, const Bounds3& b2)

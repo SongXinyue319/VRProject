@@ -24,13 +24,18 @@ int main(int argc, char** argv)
         {
             check_mode = true;
         }
+        else if (arg.rfind("spp=", 0) == 0)
+        {
+            int s = std::atoi(arg.c_str() + 4);
+            if (s >= 1) scene.spp = s;   // 每像素 NxN 超采样抗锯齿（默认 1）
+        }
         else
         {
             model_path = arg;
         }
     }
 
-    std::cout << "Model: " << model_path << "\n";
+    std::cout << "Model: " << model_path << "  (spp=" << scene.spp << ")\n";
     MeshTriangle bunny(model_path);
 
     scene.Add(&bunny);

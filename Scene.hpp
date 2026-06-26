@@ -22,6 +22,7 @@ public:
     double fov = 90;
     Vector3f backgroundColor = Vector3f(0.235294, 0.67451, 0.843137);
     int maxDepth = 5;
+    int spp = 1; // 每像素采样数（NxN 网格超采样抗锯齿）；1 = 原始像素中心单采样
 
     Scene(int w, int h) : width(w), height(h)
     {}
@@ -34,6 +35,9 @@ public:
     Intersection intersect(const Ray& ray) const;
     // 不依赖场景级 BVH 的暴力最近交点（check 模式下 scene.bvh 未构建时使用）
     Intersection intersect_noBVH(const Ray& ray) const;
+    // any-hit 遮挡查询（阴影光线用）：是否存在 t<tMax 的遮挡。两种路径分别走 BVH / 暴力。
+    bool intersectP(const Ray& ray, double tMax) const;
+    bool intersectP_noBVH(const Ray& ray, double tMax) const;
     BVHAccel *bvh;
     void buildBVH();
     Vector3f castRay(const Ray &ray, int depth) const;

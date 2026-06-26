@@ -60,6 +60,8 @@ public:
     bool intersect(const Ray& ray, float& tnear,
                    uint32_t& index) const override;
     Intersection getIntersection(Ray ray) override;
+    // 阴影/遮挡 any-hit 测试：不做背面剔除（单面遮挡物也能正确挡光），在 (eps,tMax) 内命中即真。
+    bool intersectP(const Ray& ray, double tMax) override;
     void getSurfaceProperties(const Vector3f& P, const Vector3f& I,
                               const uint32_t& index, const Vector2f& uv,
                               Vector3f& N, Vector2f& st) const override
@@ -89,6 +91,16 @@ public:
         Vector3f max_vert = Vector3f{-std::numeric_limits<float>::infinity(),
                                      -std::numeric_limits<float>::infinity(),
                                      -std::numeric_limits<float>::infinity()};
+
+        // 整个网格共用一个漫反射/光泽材质：开启高光（Ks>0、specularExponent>0），
+        // 使 Phong 高光项真正生效，而非之前 Ks=0 的纯漫反射。
+        Material* mesh_mat =
+            new Material(MaterialType::DIFFUSE_AND_GLOSSY,
+                         Vector3f(0.5, 0.5, 0.5), Vector3f(0, 0, 0));
+        mesh_mat->Kd = 0.6;
+        mesh_mat->Ks = 0.3;
+        mesh_mat->specularExponent = 64;
+
         for (int i = 0; i < mesh.Vertices.size(); i += 3) {
             std::array<Vector3f, 3> face_vertices;
             for (int j = 0; j < 3; j++) {
@@ -106,15 +118,8 @@ public:
                                     std::max(max_vert.z, vert.z));
             }
 
-            auto new_mat =
-                new Material(MaterialType::DIFFUSE_AND_GLOSSY,
-                             Vector3f(0.5, 0.5, 0.5), Vector3f(0, 0, 0));
-            new_mat->Kd = 0.6;
-            new_mat->Ks = 0.0;
-            new_mat->specularExponent = 0;
-
             triangles.emplace_back(face_vertices[0], face_vertices[1],
-                                   face_vertices[2], new_mat);
+                                   face_vertices[2], mesh_mat);
         }
 
         bounding_box = Bounds3(min_vert, max_vert);
@@ -123,7 +128,7 @@ public:
         for (auto& tri : triangles)
             ptrs.push_back(&tri);
 
-        bvh = new BVHAccel(ptrs);
+        bvh = new BVHAccel(ptrs, 1, BVHAccel::SplitMethod::SAH);
     }
 
     bool intersect(const Ray& ray) { return true; }
@@ -202,6 +207,12 @@ public:
         return nearest;
     }
 
+    // 遮挡查询委托给网格内层 BVH 的 any-hit 遍历（找到第一个 t<tMax 的遮挡即返回）。
+    bool intersectP(const Ray& ray, double tMax) override
+    {
+        return bvh ? bvh->IntersectP(ray, tMax) : false;
+    }
+
     Bounds3 bounding_box;
     std::unique_ptr<Vector3f[]> vertices;
     uint32_t numTriangles;
@@ -227,10 +238,8 @@ inline Bounds3 Triangle::getBounds() { return Union(Bounds3(v0, v1), v2); }
 inline Intersection Triangle::getIntersection(Ray ray)
 {
     Intersection inter;
-    // 只对正面三角形求交（背面剔除）：与封闭网格的可见面一致
-    if (dotProduct(ray.direction, normal) > 0)
-        return inter;
     // Möller–Trumbore 光线-三角形求交：解 O + t*D = (1-u-v)V0 + u*V1 + v*V2
+    // 注：不再背面剔除——对闭合网格的最近可见面无影响，但能让阴影光线正确命中朝向光源的面。
     Vector3f pvec = crossProduct(ray.direction, e2);
     float det = dotProduct(e1, pvec);
     if (fabs(det) < EPSILON)        // 行列式≈0：光线与三角形平行，无交点
@@ -263,4 +272,22 @@ inline Intersection Triangle::getIntersection(Ray ray)
 inline Vector3f Triangle::evalDiffuseColor(const Vector2f&) const
 {
     return Vector3f(0.5, 0.5, 0.5);
+}
+
+inline bool Triangle::intersectP(const Ray& ray, double tMax)
+{
+    // 与 getIntersection 一致的非背面剔除 Möller–Trumbore（两面都算），
+    // 命中且 t∈(EPSILON,tMax) 即为遮挡。不能用 rayTriangleIntersect（其 u>det 判定隐含背面剔除）。
+    Vector3f pvec = crossProduct(ray.direction, e2);
+    float det = dotProduct(e1, pvec);
+    if (fabs(det) < EPSILON) return false;
+    float invDet = 1.0f / det;
+    Vector3f tvec = ray.origin - v0;
+    float u = dotProduct(tvec, pvec) * invDet;
+    if (u < 0 || u > 1) return false;
+    Vector3f qvec = crossProduct(tvec, e1);
+    float v = dotProduct(ray.direction, qvec) * invDet;
+    if (v < 0 || u + v > 1) return false;
+    float t = dotProduct(e2, qvec) * invDet;
+    return t > EPSILON && t < tMax;
 }

@@ -33,8 +33,13 @@ public:
     ~BVHAccel();
 
     Intersection Intersect(const Ray &ray) const;
-    Intersection getIntersection(BVHBuildNode* node, const Ray& ray)const;
-    bool IntersectP(const Ray &ray) const;
+    // 有序遍历 + 最近距离剪枝：把命中写入 best（best.distance 初值为 +inf）。
+    void getIntersection(BVHBuildNode* node, const Ray& ray, const Vector3f& invDir,
+                         const std::array<int, 3>& dirIsNeg, Intersection& best) const;
+    // any-hit 遮挡查询：是否存在 t<tMax 的遮挡（阴影光线用，命中即返回）。
+    bool IntersectP(const Ray &ray, double tMax) const;
+    bool intersectPNode(BVHBuildNode* node, const Ray& ray, const Vector3f& invDir,
+                        const std::array<int, 3>& dirIsNeg, double tMax) const;
     BVHBuildNode* root;
 
     // BVHAccel Private Methods

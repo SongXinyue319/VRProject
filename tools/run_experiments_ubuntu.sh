@@ -20,6 +20,18 @@ cmake -S "$ROOT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
 echo "Building RayTracing..."
 cmake --build "$BUILD_DIR" --config Release -j"$(nproc)"
 
+# 固定线程数，保证 BVH 与无 BVH 两种模式在相同硬件/并行度下公平对比、可复现
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-32}"
+echo "OMP_NUM_THREADS=$OMP_NUM_THREADS (cores=$(nproc))"
+{
+  echo "date=$(date -Iseconds)"
+  echo "host=$(hostname)"
+  echo "cores=$(nproc)"
+  echo "OMP_NUM_THREADS=$OMP_NUM_THREADS"
+  echo "spp=1 (timing 用单采样，与原方法学一致；beauty 图另行 spp=2 渲染)"
+  echo "build=Release -O3 + OpenMP + SAH-BVH"
+} > "$OUT_DIR/meta.txt"
+
 EXE="$BUILD_DIR/RayTracing"
 if [[ ! -x "$EXE" && -x "$BUILD_DIR/Release/RayTracing" ]]; then
   EXE="$BUILD_DIR/Release/RayTracing"
@@ -76,6 +88,7 @@ run_case() {
   echo "$name,$vertices,$faces,$bvh_seconds,$no_bvh_seconds,$speedup" >> "$SUMMARY"
 }
 
+run_case "bunny" "../models/bunny/bunny.obj" "2503" "4968"
 run_case "dragon_res3" "../models/stanford_dragon/dragon_vrip_res3.obj" "22998" "47794"
 run_case "dragon_res2" "../models/stanford_dragon/dragon_vrip_res2.obj" "100250" "202520"
 run_case "armadillo" "../models/stanford_armadillo/armadillo.obj" "172974" "345944"
